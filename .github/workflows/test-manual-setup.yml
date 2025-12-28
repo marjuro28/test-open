@@ -161,7 +161,7 @@ jobs:
           mkdir -p manual-setup/test-results
           bats --formatter junit manual-setup/tests.bat > manual-setup/test-results/manual-setup.xml
 
-# -------------------- TEST STEP 4: Generate Allure HTML report --------------------
+# TEST STEP 4: Generate Allure HTML report
 
       - name: Generate Allure HTML report
         run: |
