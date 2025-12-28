@@ -178,3 +178,13 @@ jobs:
         with:
           name: bats-html-test-results
           path: manual-setup/allure-report/
+
+# -------------------- TEST STEP 6: Deploy Allure Report to GitHub Pages --------------------
+
+      - name: Deploy Allure Report to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: manual-setup/allure-report  # Ensure this is correct
+          user_name: "GitHub Actions"
+          user_email: "actions@github.com"
