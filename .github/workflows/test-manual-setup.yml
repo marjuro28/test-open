@@ -1,0 +1,180 @@
+# Github action to test manual-setup.sh against the latest debian stable version
+
+# 1. Copy pub key from master pc into client (replace username and/or ip if needed)
+
+name: Test manual configuration
+
+on:
+  schedule:
+    - cron: '0 1 * * 1'
+  workflow_dispatch:
+
+jobs:
+  setup-two-containers:
+    runs-on: ubuntu-latest
+    env:
+      MASTER_CONTAINER: casa
+      CLIENT_CONTAINER: marcos
+      DOCKER_NETWORK: mynet
+      MASTER_USER: casa
+      CLIENT_USER: marcos
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Create Docker network and start containers
+        run: |
+
+          # Create LAN on host machine
+          docker network create $DOCKER_NETWORK
+
+          # Create containers
+          docker run -d --name $MASTER_CONTAINER --network $DOCKER_NETWORK debian:stable sleep infinity
+          docker run -d --name $CLIENT_CONTAINER --network $DOCKER_NETWORK debian:stable sleep infinity
+
+      - name: Create user in master container
+        run: |
+          docker exec $MASTER_CONTAINER bash -c "
+            useradd -m $MASTER_USER
+          "
+
+      - name: Create user in client container
+        run: |
+          docker exec $CLIENT_CONTAINER bash -c "
+            useradd -m $CLIENT_USER
+          "
+
+      - name: Install SSH in master container
+        run: |
+          docker exec $MASTER_CONTAINER bash -c "
+            apt-get update
+            apt-get install -y openssh-server
+            mkdir -p /var/run/sshd
+          "
+
+      - name: Enable SSH in client container
+        run: |
+          docker exec $CLIENT_CONTAINER bash -c "
+            apt-get update
+            apt-get install -y openssh-client
+          "
+
+      - name: Prepare SSH directory in master container
+        run: |
+          docker exec $MASTER_CONTAINER bash -c "
+            mkdir -p /home/$MASTER_USER/.ssh
+            chown -R $MASTER_USER:$MASTER_USER /home/$MASTER_USER/.ssh
+            chmod 700 /home/$MASTER_USER/.ssh
+          "
+
+      - name: Prepare SSH directory with keys in client container
+        run: |
+          docker exec $CLIENT_CONTAINER bash -c "
+            mkdir -p /home/$CLIENT_USER/.ssh
+            ssh-keygen -t ed25519 -f /home/$CLIENT_USER/.ssh/id_ed25519 -N ''
+            chown -R $CLIENT_USER:$CLIENT_USER /home/$CLIENT_USER/.ssh
+            chmod 700 /home/$CLIENT_USER/.ssh
+          "
+
+      - name: Prepare authorized_keys folder in master container
+        run: |
+          docker exec $MASTER_CONTAINER bash -c "
+            touch /home/$MASTER_USER/.ssh/authorized_keys
+            chown $MASTER_USER:$MASTER_USER /home/$MASTER_USER/.ssh/authorized_keys
+            chmod 600 /home/$MASTER_USER/.ssh/authorized_keys
+          "
+
+      - name: Copy client public key to master container
+        run: |
+          docker cp $CLIENT_CONTAINER:/home/$CLIENT_USER/.ssh/id_ed25519.pub $RUNNER_TEMP/client_id_ed25519.pub
+          docker exec -i $MASTER_CONTAINER bash -c "cat >> /home/$MASTER_USER/.ssh/authorized_keys" < $RUNNER_TEMP/client_id_ed25519.pub
+          cat $RUNNER_TEMP/client_id_ed25519.pub
+
+      - name: Run SSH connection from client to master
+        run: |
+          docker exec -d $MASTER_CONTAINER /usr/sbin/sshd
+          sleep 5
+          docker exec -u $CLIENT_USER $CLIENT_CONTAINER bash -c "
+            ssh -o StrictHostKeyChecking=no -o BatchMode=yes $MASTER_USER@$MASTER_CONTAINER
+          "
+
+# 2. Run as root: install sudo
+
+      - name: Install sudo in master container
+        run: |
+          docker exec $MASTER_CONTAINER bash -c "
+            apt-get update
+            apt-get install -y sudo
+          "
+
+# 3. Run as root: Add standard user to sudo group (replace username if needed)
+
+      - name: Add standard user to sudo group
+        run: |
+          docker exec $MASTER_CONTAINER bash -c "
+            usermod -aG sudo $MASTER_USER
+            "
+
+# 4. Run as root: Allow sudoer to run commands w/o password (r eplace username if needed)
+
+      - name: Allow sudoer to run commands w/o password
+        run: |
+          docker exec -e MASTER_USER="$MASTER_USER" $MASTER_CONTAINER bash -c '
+            SUDOERS_DIR="/etc/sudoers.d"
+            FILE="$SUDOERS_DIR/$MASTER_USER"
+
+            echo "Creating $FILE ..."
+            echo "$MASTER_USER ALL=(ALL) NOPASSWD: ALL" > "$FILE"
+
+            chmod 440 "$FILE"
+
+            echo "Done. File content:"
+            '
+
+# -------------------- TEST STEP 1: Install Bats --------------------
+      - name: Install Bats
+        run: |
+          sudo apt update                         # Update package list
+          sudo apt install -y bats                 # Install bats-core
+
+# -------------------- TEST STEP 2: Install latest Allure version --------------------
+      - name: Download and install latest Allure
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip curl jq
+
+          # Get latest Allure version from GitHub API
+          LATEST=$(curl -s https://api.github.com/repos/allure-framework/allure2/releases/latest | jq -r '.tag_name')
+          echo "Latest Allure version: $LATEST"
+          echo "LATEST=$LATEST" >> $GITHUB_ENV
+
+          # Download and unzip
+          curl -SL https://github.com/allure-framework/allure2/releases/download/$LATEST/allure-$LATEST.zip -o allure.zip
+          unzip allure.zip -d allure
+
+# -------------------- TEST STEP 3: Run Bats tests and generate JUnit XML --------------------
+      - name: Run Bats tests
+        run: |
+          # Run Bats and output JUnit XML
+          mkdir -p manual-setup/test-results
+          bats --formatter junit manual-setup/tests.bat > manual-setup/test-results/manual-setup.xml
+          cat manual-setup/test-results/manual-setup.xml
+
+# -------------------- TEST STEP 4: Generate Allure HTML report --------------------
+
+      - name: Generate Allure HTML report
+        run: |
+          mkdir -p manual-setup/allure-report
+          ./allure/allure-${LATEST}/bin/allure generate manual-setup/test-results \
+            -o manual-setup/allure-report --clean
+          cat manual-setup/allure-report/index.html
+          
+# -------------------- TEST STEP 5: Save test results as an artifact --------------------
+
+      - name: Upload Bats test results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bats-html-test-results
+          path: manual-setup/allure-report/
