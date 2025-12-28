@@ -160,7 +160,6 @@ jobs:
           # Run Bats and output JUnit XML
           mkdir -p manual-setup/test-results
           bats --formatter junit manual-setup/tests.bat > manual-setup/test-results/manual-setup.xml
-          cat manual-setup/test-results/manual-setup.xml
 
 # -------------------- TEST STEP 4: Generate Allure HTML report --------------------
 
@@ -169,17 +168,8 @@ jobs:
           mkdir -p manual-setup/allure-report
           ./allure/allure-${LATEST}/bin/allure generate manual-setup/test-results \
             -o manual-setup/allure-report --clean
-          cat manual-setup/allure-report/index.html
-          
-# -------------------- TEST STEP 5: Save test results as an artifact --------------------
-
-      - name: Upload Bats test results as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bats-html-test-results
-          path: manual-setup/allure-report/
-
-# -------------------- TEST STEP 6: Deploy Allure Report to GitHub Pages --------------------
+            
+# -------------------- TEST STEP 5: Deploy Allure Report to GitHub Pages --------------------
 
       - name: Deploy Allure Report to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
