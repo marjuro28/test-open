@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
 
 # Define container names as variables (match your workflow)
-MASTER_CONTAINER="casa"
-CLIENT_CONTAINER="marcos"
-MASTER_USER="casa"
-CLIENT_USER="marcos"
+MASTER_CONTAINER="mymaster"
+CLIENT_CONTAINER="myclient"
+MASTER_USER="mymaster"
+CLIENT_USER="myclient"
 
 # --------------------
 # Test 1: Master container exists
