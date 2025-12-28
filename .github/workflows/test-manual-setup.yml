@@ -154,7 +154,7 @@ jobs:
           curl -SL https://github.com/allure-framework/allure2/releases/download/$LATEST/allure-$LATEST.zip -o allure.zip
           unzip allure.zip -d allure
 
-# -------------------- TEST STEP 3: Run Bats tests and generate JUnit XML --------------------
+# TEST STEP 3: Run Bats tests and generate JUnit XML
       - name: Run Bats tests
         run: |
           # Run Bats and output JUnit XML
