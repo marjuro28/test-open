@@ -13,11 +13,11 @@ jobs:
   setup-two-containers:
     runs-on: ubuntu-latest
     env:
-      MASTER_CONTAINER: casa
-      CLIENT_CONTAINER: marcos
+      MASTER_CONTAINER: mymaster
+      CLIENT_CONTAINER: myclient
       DOCKER_NETWORK: mynet
-      MASTER_USER: casa
-      CLIENT_USER: marcos
+      MASTER_USER: mymaster
+      CLIENT_USER: myclient
 
     steps:
 
